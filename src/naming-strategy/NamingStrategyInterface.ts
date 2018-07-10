@@ -1,3 +1,5 @@
+import {Table} from "../schema-builder/table/Table";
+
 /**
  * Naming strategy defines how auto-generated names for such things like table name, or table column gonna be
  * generated.
@@ -10,19 +12,24 @@ export interface NamingStrategyInterface {
     name?: string;
 
     /**
-     * Gets the table name from the given class name.
+     * Normalizes table name.
+     *
+     * @param targetName Name of the target entity that can be used to generate a table name.
+     * @param userSpecifiedName For example if user specified a table name in a decorator, e.g. @Entity("name")
      */
-    tableName(className: string, customName?: string): string;
+    tableName(targetName: string, userSpecifiedName: string|undefined): string;
+
+    /**
+     * Creates a table name for a junction table of a closure table.
+     *
+     * @param originalClosureTableName Name of the closure table which owns this junction table.
+     */
+    closureJunctionTableName(originalClosureTableName: string): string;
 
     /**
      * Gets the table's column name from the given property name.
      */
-    columnName(propertyName: string, customName?: string): string;
-
-    /**
-     * Gets the embedded's column name from the given property name.
-     */
-    embeddedColumnName(embeddedPropertyName: string, columnPropertyName: string, columnCustomName?: string): string;
+    columnName(propertyName: string, customName: string|undefined, embeddedPrefixes: string[]): string;
 
     /**
      * Gets the table's relation name from the given property name.
@@ -30,53 +37,79 @@ export interface NamingStrategyInterface {
     relationName(propertyName: string): string;
 
     /**
-     * Gets the name of the index - simple and compose index.
+     * Gets the table's primary key name from the given table name and column names.
      */
-    indexName(customName: string|undefined, tableName: string, columns: string[]): string;
+    primaryKeyName(tableOrName: Table|string, columnNames: string[]): string;
 
     /**
-     * Gets the name of the join column used in the one-to-one and many-to-one relations.
+     * Gets the table's unique constraint name from the given table name and column names.
      */
-    joinColumnInverseSideName(joinColumnName: string|undefined, propertyName: string): string;
+    uniqueConstraintName(tableOrName: Table|string, columnNames: string[]): string;
 
     /**
-     * Gets the name of the join table used in the many-to-many relations.
+     * Gets the relation constraint (UNIQUE or UNIQUE INDEX) name from the given table name, column names
+     * and WHERE condition, if UNIQUE INDEX used.
      */
-    joinTableName(firstTableName: string, 
-                  secondTableName: string,
-                  firstPropertyName: string,
-                  secondPropertyName: string, 
-                  firstColumnName: string, 
-                  secondColumnName: string): string;
+    relationConstraintName(tableOrName: Table|string, columnNames: string[], where?: string): string;
 
     /**
-     * Gets the name of the column used for columns in the junction tables.
+     * Gets the table's default constraint name from the given table name and column name.
      */
-    joinTableColumnName(tableName: string, columnName: string, secondTableName: string, secondColumnName: string): string;
-
-    /**
-     * Gets the name of the column used for second column name in the junction tables.
-     */
-    joinTableInverseColumnName(tableName: string, columnName: string, secondTableName: string, secondColumnName: string): string;
-
-    /**
-     * Gets the name for the closure junction table.
-     */
-    closureJunctionTableName(tableName: string): string;
+    defaultConstraintName(tableOrName: Table|string, columnName: string): string;
 
     /**
      * Gets the name of the foreign key.
      */
-    foreignKeyName(tableName: string, columnNames: string[], referencedTableName: string, referencedColumnNames: string[]): string;
+    foreignKeyName(tableOrName: Table|string, columnNames: string[]): string;
 
     /**
-     * Gets the column name of the column with foreign key to the parent table used in the class table inheritance.
+     * Gets the name of the index - simple and compose index.
      */
-    classTableInheritanceParentColumnName(parentTableName: any, parentTableIdPropertyName: any): string;
+    indexName(tableOrName: Table|string, columns: string[], where?: string): string;
 
     /**
-     * Adds prefix to the table.
+     * Gets the name of the check constraint.
      */
-    prefixTableName(prefix: string, originalTableName: string): string;
+    checkConstraintName(tableOrName: Table|string, expression: string): string;
+
+    /**
+     * Gets the name of the join column used in the one-to-one and many-to-one relations.
+     */
+    joinColumnName(relationName: string, referencedColumnName: string): string;
+
+    /**
+     * Gets the name of the join table used in the many-to-many relations.
+     */
+    joinTableName(firstTableName: string,
+                  secondTableName: string,
+                  firstPropertyName: string,
+                  secondPropertyName: string): string;
+
+    /**
+     * Columns in join tables can have duplicate names in case of self-referencing.
+     * This method provide a resolution for such column names.
+     */
+    joinTableColumnDuplicationPrefix(columnName: string, index: number): string;
+
+    /**
+     * Gets the name of the column used for columns in the junction tables.
+     *
+     * The reverse?:boolean parameter denotes if the joinTableColumnName is called for the junctionColumn (false)
+     * or the inverseJunctionColumns (true)
+     */
+    joinTableColumnName(tableName: string, propertyName: string, columnName?: string): string;
+
+    /**
+     * Gets the name of the column used for columns in the junction tables from the invers side of the relationship.
+     */
+    joinTableInverseColumnName(tableName: string, propertyName: string, columnName?: string): string;
+
+    /**
+     * Adds globally set prefix to the table name.
+     * This method is executed no matter if prefix was set or not.
+     * Table name is either user's given table name, either name generated from entity target.
+     * Note that table name comes here already normalized by #tableName method.
+     */
+    prefixTableName(prefix: string, tableName: string): string;
 
 }

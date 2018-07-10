@@ -10,11 +10,11 @@
       "generated": true
     },
     "title": {
-      "type": "string",
+      "type": "varchar",
       "nullable": false
     },
     "text": {
-      "type": "string",
+      "type": "varchar",
       "nullable": false
     }
   },
@@ -24,17 +24,13 @@
       "type": "one-to-one",
       "joinColumn": true,
       "inverseSide": "post",
-      "cascadeInsert": true,
-      "cascadeUpdate": true,
-      "cascadeRemove": true
+      "cascade": true
     },
     "images": {
       "target": "Image",
       "type": "one-to-many",
       "inverseSide": "post",
-      "cascadeInsert": true,
-      "cascadeUpdate": true,
-      "cascadeRemove": true
+      "cascade": true
     },
     "secondaryImages": {
       "target": "Image",
@@ -45,9 +41,7 @@
       "target": "Category",
       "type": "many-to-many",
       "joinTable": true,
-      "cascadeInsert": true,
-      "cascadeUpdate": true,
-      "cascadeRemove": true,
+      "cascade": true,
       "inverseSide": "posts"
     }
   }

@@ -10,7 +10,7 @@
       "generated": true
     },
     "description": {
-      "type": "string",
+      "type": "varchar",
       "nullable": false
     }
   },
@@ -18,9 +18,7 @@
     "posts": {
       "target": "Post",
       "type": "many-to-many",
-      "cascadeInsert": true,
-      "cascadeUpdate": true,
-      "cascadeRemove": true,
+      "cascade": true,
       "inverseSide": "categories"
     }
   }

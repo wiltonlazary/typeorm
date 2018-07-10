@@ -1,4 +1,4 @@
-import {PrimaryGeneratedColumn, Column, Table, ManyToOne} from "../../../src/index";
+import {Column, Entity, ManyToOne, PrimaryGeneratedColumn} from "../../../src/index";
 import {PostDetails} from "./PostDetails";
 import {PostCategory} from "./PostCategory";
 import {PostAuthor} from "./PostAuthor";
@@ -6,7 +6,7 @@ import {PostInformation} from "./PostInformation";
 import {PostImage} from "./PostImage";
 import {PostMetadata} from "./PostMetadata";
 
-@Table("sample3_post")
+@Entity("sample3_post")
 export class Post {
 
     @PrimaryGeneratedColumn()
@@ -20,38 +20,32 @@ export class Post {
 
     // post has relation with category, however inverse relation is not set (category does not have relation with post set)
     @ManyToOne(type => PostCategory, {
-        cascadeInsert: true,
-        cascadeUpdate: true,
-        cascadeRemove: true
+        cascade: true
     })
     category: PostCategory;
 
     // post has relation with details. cascade inserts here means if new PostDetails instance will be set to this 
     // relation it will be inserted automatically to the db when you save this Post entity
     @ManyToOne(type => PostDetails, details => details.posts, {
-        cascadeInsert: true
+        cascade: ["insert"]
     })
     details: PostDetails;
 
     // post has relation with details. cascade update here means if new PostDetail instance will be set to this relation
     // it will be inserted automatically to the db when you save this Post entity
     @ManyToOne(type => PostImage, image => image.posts, {
-        cascadeUpdate: true
+        cascade: ["update"]
     })
     image: PostImage;
 
     // post has relation with details. cascade update here means if new PostDetail instance will be set to this relation
     // it will be inserted automatically to the db when you save this Post entity
-    @ManyToOne(type => PostMetadata, metadata => metadata.posts, {
-        cascadeRemove: true
-    })
-    metadata: PostMetadata|undefined;
+    @ManyToOne(type => PostMetadata, metadata => metadata.posts)
+    metadata: PostMetadata|null;
 
     // post has relation with details. full cascades here
     @ManyToOne(type => PostInformation, information => information.posts, {
-        cascadeInsert: true,
-        cascadeUpdate: true,
-        cascadeRemove: true
+        cascade: true
     })
     information: PostInformation;
 

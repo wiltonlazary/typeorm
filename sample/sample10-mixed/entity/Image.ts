@@ -1,9 +1,9 @@
-import {PrimaryGeneratedColumn, Column, Table, ManyToOne, OneToOne} from "../../../src/index";
+import {Column, Entity, ManyToOne, OneToOne, PrimaryGeneratedColumn} from "../../../src/index";
 import {Post} from "./Post";
 import {ImageDetails} from "./ImageDetails";
 import {JoinColumn} from "../../../src/decorator/relations/JoinColumn";
 
-@Table("sample10_image")
+@Entity("sample10_image")
 export class Image {
 
     @PrimaryGeneratedColumn()
@@ -16,14 +16,12 @@ export class Image {
     post: Post;
     
     @ManyToOne(type => Post, post => post.secondaryImages, {
-        cascadeInsert: true
+        cascade: ["insert"]
     })
     secondaryPost: Post;
 
     @OneToOne(type => ImageDetails, details => details.image, {
-        cascadeInsert: true,
-        cascadeUpdate: true,
-        cascadeRemove: true
+        cascade: true
     })
     @JoinColumn()
     details: ImageDetails;

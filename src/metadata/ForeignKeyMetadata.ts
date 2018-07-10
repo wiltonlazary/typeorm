@@ -1,11 +1,8 @@
 import {ColumnMetadata} from "./ColumnMetadata";
-import {TableMetadata} from "./TableMetadata";
 import {EntityMetadata} from "./EntityMetadata";
-
-/**
- * ON_DELETE type to be used to specify delete strategy when some relation is being deleted from the database.
- */
-export type OnDeleteType = "RESTRICT"|"CASCADE"|"SET NULL";
+import {NamingStrategyInterface} from "../naming-strategy/NamingStrategyInterface";
+import {OnDeleteType} from "./types/OnDeleteType";
+import {OnUpdateType} from "./types/OnUpdateType";
 
 /**
  * Contains all information about entity's foreign key.
@@ -21,82 +18,87 @@ export class ForeignKeyMetadata {
      */
     entityMetadata: EntityMetadata;
 
-    // -------------------------------------------------------------------------
-    // Public Readonly Properties
-    // -------------------------------------------------------------------------
+    /**
+     * Entity metadata which this foreign key references.
+     */
+    referencedEntityMetadata: EntityMetadata;
 
     /**
      * Array of columns of this foreign key.
      */
-    readonly columns: ColumnMetadata[];
-
-    /**
-     * Table to which this foreign key is references.
-     */
-    readonly referencedTable: TableMetadata;
+    columns: ColumnMetadata[] = [];
 
     /**
      * Array of referenced columns.
      */
-    readonly referencedColumns: ColumnMetadata[];
+    referencedColumns: ColumnMetadata[] = [];
 
     /**
      * What to do with a relation on deletion of the row containing a foreign key.
      */
-    readonly onDelete: OnDeleteType;
-
-    // -------------------------------------------------------------------------
-    // Constructor
-    // -------------------------------------------------------------------------
-
-    constructor(columns: ColumnMetadata[], 
-                referencedTable: TableMetadata, 
-                referencedColumns: ColumnMetadata[],
-                onDelete?: OnDeleteType) {
-        this.columns = columns;
-        this.referencedTable = referencedTable;
-        this.referencedColumns = referencedColumns;
-        if (onDelete)
-            this.onDelete = onDelete;
-    }
-
-    // -------------------------------------------------------------------------
-    // Accessors
-    // -------------------------------------------------------------------------
+    onDelete?: OnDeleteType;
 
     /**
-     * Gets the table name to which this foreign key is applied.
+     * What to do with a relation on update of the row containing a foreign key.
      */
-    get tableName() {
-        return this.entityMetadata.table.name;
-    }
+    onUpdate?: OnUpdateType;
 
     /**
      * Gets the table name to which this foreign key is referenced.
      */
-    get referencedTableName() {
-        return this.referencedTable.name;
-    }
+    referencedTablePath: string;
 
     /**
      * Gets foreign key name.
      */
-    get name() {
-        return this.entityMetadata.namingStrategy.foreignKeyName(this.tableName, this.columnNames, this.referencedTable.name, this.referencedColumnNames);
-    }
+    name: string;
 
     /**
      * Gets array of column names.
      */
-    get columnNames(): string[] {
-        return this.columns.map(column => column.name);
-    }
+    columnNames: string[] = [];
 
     /**
      * Gets array of referenced column names.
      */
-    get referencedColumnNames(): string[] {
-        return this.referencedColumns.map(column => column.name);
+    referencedColumnNames: string[] = [];
+
+    // ---------------------------------------------------------------------
+    // Constructor
+    // ---------------------------------------------------------------------
+
+    constructor(options: {
+        entityMetadata: EntityMetadata,
+        referencedEntityMetadata: EntityMetadata,
+        namingStrategy?: NamingStrategyInterface,
+        columns: ColumnMetadata[],
+        referencedColumns: ColumnMetadata[],
+        onDelete?: OnDeleteType,
+        onUpdate?: OnUpdateType
+    }) {
+        this.entityMetadata = options.entityMetadata;
+        this.referencedEntityMetadata = options.referencedEntityMetadata;
+        this.columns = options.columns;
+        this.referencedColumns = options.referencedColumns;
+        this.onDelete = options.onDelete;
+        this.onUpdate = options.onUpdate;
+        if (options.namingStrategy)
+            this.build(options.namingStrategy);
+    }
+
+    // ---------------------------------------------------------------------
+    // Public Methods
+    // ---------------------------------------------------------------------
+
+    /**
+     * Builds some depend foreign key properties.
+     * Must be called after all entity metadatas and their columns are built.
+     */
+    build(namingStrategy: NamingStrategyInterface) {
+        this.columnNames = this.columns.map(column => column.databaseName);
+        this.referencedColumnNames = this.referencedColumns.map(column => column.databaseName);
+        this.referencedTablePath = this.referencedEntityMetadata.tablePath;
+        this.name = namingStrategy.foreignKeyName(this.entityMetadata.tablePath, this.columnNames);
     }
 
 }

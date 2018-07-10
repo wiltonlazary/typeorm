@@ -1,9 +1,16 @@
-import {ColumnSchema} from "../schema-builder/schema/ColumnSchema";
-import {ColumnMetadata} from "../metadata/ColumnMetadata";
-import {TableSchema} from "../schema-builder/schema/TableSchema";
-import {NamingStrategyInterface} from "../naming-strategy/NamingStrategyInterface";
-import {ForeignKeySchema} from "../schema-builder/schema/ForeignKeySchema";
-import {IndexSchema} from "../schema-builder/schema/IndexSchema";
+import {TableColumn} from "../schema-builder/table/TableColumn";
+import {Table} from "../schema-builder/table/Table";
+import {TableForeignKey} from "../schema-builder/table/TableForeignKey";
+import {TableIndex} from "../schema-builder/table/TableIndex";
+import {Connection} from "../connection/Connection";
+import {ReadStream} from "../platform/PlatformTools";
+import {EntityManager} from "../entity-manager/EntityManager";
+import {ObjectLiteral} from "../common/ObjectLiteral";
+import {SqlInMemory} from "../driver/SqlInMemory";
+import {TableUnique} from "../schema-builder/table/TableUnique";
+import {Broadcaster} from "../subscriber/Broadcaster";
+import {TableCheck} from "../schema-builder/table/TableCheck";
+import {IsolationLevel} from "../driver/types/IsolationLevel";
 
 /**
  * Runs queries on a single database connection.
@@ -11,36 +18,77 @@ import {IndexSchema} from "../schema-builder/schema/IndexSchema";
 export interface QueryRunner {
 
     /**
-     * Releases database connection. This is needed when using connection pooling.
-     * If connection is not from a pool, it should not be released.
-     * You cannot use this class's methods after its released.
+     * Connection used by this query runner.
+     */
+    readonly connection: Connection;
+
+    /**
+     * Broadcaster used on this query runner to broadcast entity events.
+     */
+    readonly broadcaster: Broadcaster;
+
+    /**
+     * Entity manager working only with this query runner.
+     */
+    readonly manager: EntityManager;
+
+    /**
+     * Indicates if connection for this query runner is released.
+     * Once its released, query runner cannot run queries anymore.
+     */
+    readonly isReleased: boolean;
+
+    /**
+     * Indicates if transaction is in progress.
+     */
+    readonly isTransactionActive: boolean;
+
+    /**
+     * Stores temporarily user data.
+     * Useful for sharing data with subscribers.
+     */
+    data: ObjectLiteral;
+
+    /**
+     * All synchronized tables in the database.
+     */
+    loadedTables: Table[];
+
+    /**
+     * Creates/uses database connection from the connection pool to perform further operations.
+     * Returns obtained database connection.
+     */
+    connect(): Promise<any>;
+
+    /**
+     * Releases used database connection.
+     * You cannot use query runner methods after connection is released.
      */
     release(): Promise<void>;
 
     /**
      * Removes all tables from the currently connected database.
+     * Be careful with using this method and avoid using it in production or migrations
+     * (because it can clear all your database).
      */
-    clearDatabase(): Promise<void>;
+    clearDatabase(database?: string): Promise<void>;
 
     /**
      * Starts transaction.
      */
-    beginTransaction(): Promise<void>;
+    startTransaction(isolationLevel?: IsolationLevel): Promise<void>;
 
     /**
      * Commits transaction.
+     * Error will be thrown if transaction was not started.
      */
     commitTransaction(): Promise<void>;
 
     /**
      * Ends transaction.
+     * Error will be thrown if transaction was not started.
      */
     rollbackTransaction(): Promise<void>;
-
-    /**
-     * Checks if transaction is in progress.
-     */
-    isTransactionActive(): boolean;
 
     /**
      * Executes a given SQL query and returns raw database results.
@@ -48,78 +96,260 @@ export interface QueryRunner {
     query(query: string, parameters?: any[]): Promise<any>;
 
     /**
-     * Updates rows that match given simple conditions in the given table.
+     * Returns raw data stream.
      */
-    update(tableName: string, valuesMap: Object, conditions: Object): Promise<void>;
+    stream(query: string, parameters?: any[], onEnd?: Function, onError?: Function): Promise<ReadStream>;
 
     /**
-     * Inserts a new row into given table.
+     * Returns all available database names including system databases.
      */
-    insert(tableName: string, valuesMap: Object, generatedColumn?: ColumnMetadata): Promise<any>;
+    getDatabases(): Promise<string[]>;
 
     /**
-     * Performs a simple DELETE query by a given conditions in a given table.
+     * Returns all available schema names including system schemas.
+     * If database parameter specified, returns schemas of that database.
+     * Useful for SQLServer and Postgres only.
      */
-    delete(tableName: string, conditions: Object): Promise<void>;
+    getSchemas(database?: string): Promise<string[]>;
 
     /**
-     * Inserts new values into closure table.
+     * Loads a table by a given name from the database.
      */
-    insertIntoClosureTable(tableName: string, newEntityId: any, parentId: any, hasLevel: boolean): Promise<number>;
+    getTable(tableName: string): Promise<Table|undefined>;
 
     /**
-     * Converts a column type of the metadata to the database column's type.
+     * Loads all tables from the database and returns them.
+     *
+     * todo: make tableNames optional
      */
-    normalizeType(column: ColumnMetadata): any;
+    getTables(tableNames: string[]): Promise<Table[]>;
 
     /**
-     * Loads all tables (with given names) from the database and creates a TableSchema from them.
+     * Checks if a database with the given name exist.
      */
-    loadSchemaTables(tableNames: string[], namingStrategy: NamingStrategyInterface): Promise<TableSchema[]>;
+    hasDatabase(database: string): Promise<boolean>;
 
     /**
-     * Creates a new table from the given table metadata and column metadatas.
+     * Checks if a schema with the given name exist.
      */
-    createTable(table: TableSchema): Promise<void>;
+    hasSchema(schema: string): Promise<boolean>;
 
     /**
-     * Creates new columns in the table.
+     * Checks if a table with the given name exist.
      */
-    createColumns(tableSchema: TableSchema, columns: ColumnSchema[]): Promise<void>;
+    hasTable(table: Table|string): Promise<boolean>;
 
     /**
-     * Changes a columns in the table.
+     * Checks if a column exist in the table.
      */
-    changeColumns(tableSchema: TableSchema, changedColumns: { newColumn: ColumnSchema, oldColumn: ColumnSchema }[]): Promise<void>;
+    hasColumn(table: Table|string, columnName: string): Promise<boolean>;
 
     /**
-     * Drops the columns in the table.
+     * Creates a new database.
      */
-    dropColumns(dbTable: TableSchema, columns: ColumnSchema[]): Promise<void>;
+    createDatabase(database: string, ifNotExist?: boolean): Promise<void>;
 
     /**
-     * Updates primary keys in the table.
+     * Drops database.
      */
-    updatePrimaryKeys(dbTable: TableSchema): Promise<void>;
+    dropDatabase(database: string, ifExist?: boolean): Promise<void>;
 
     /**
-     * Creates a new foreign keys.
+     * Creates a new table schema.
      */
-    createForeignKeys(dbTable: TableSchema, foreignKeys: ForeignKeySchema[]): Promise<void>;
+    createSchema(schemaPath: string, ifNotExist?: boolean): Promise<void>;
 
     /**
-     * Drops a foreign keys from the table.
+     * Drops table schema.
+     * For SqlServer can accept schema path (e.g. 'dbName.schemaName') as parameter.
+     * If schema path passed, it will drop schema in specified database.
      */
-    dropForeignKeys(tableSchema: TableSchema, foreignKeys: ForeignKeySchema[]): Promise<void>;
+    dropSchema(schemaPath: string, ifExist?: boolean, isCascade?: boolean): Promise<void>;
+
+    /**
+     * Creates a new table.
+     */
+    createTable(table: Table, ifNotExist?: boolean, createForeignKeys?: boolean, createIndices?: boolean): Promise<void>;
+
+    /**
+     * Drops a table.
+     */
+    dropTable(table: Table|string, ifExist?: boolean, dropForeignKeys?: boolean, dropIndices?: boolean): Promise<void>;
+
+    /**
+     * Renames a table.
+     */
+    renameTable(oldTableOrName: Table|string, newTableName: string): Promise<void>;
+
+    /**
+     * Adds a new column.
+     */
+    addColumn(table: Table|string, column: TableColumn): Promise<void>;
+
+    /**
+     * Adds new columns.
+     */
+    addColumns(table: Table|string, columns: TableColumn[]): Promise<void>;
+
+    /**
+     * Renames a column.
+     */
+    renameColumn(table: Table|string, oldColumnOrName: TableColumn|string, newColumnOrName: TableColumn|string): Promise<void>;
+
+    /**
+     * Changes a column in the table.
+     */
+    changeColumn(table: Table|string, oldColumn: TableColumn|string, newColumn: TableColumn): Promise<void>;
+
+    /**
+     * Changes columns in the table.
+     */
+    changeColumns(table: Table|string, changedColumns: { oldColumn: TableColumn, newColumn: TableColumn }[]): Promise<void>;
+
+    /**
+     * Drops a column in the table.
+     */
+    dropColumn(table: Table|string, column: TableColumn|string): Promise<void>;
+
+    /**
+     * Drops columns in the table.
+     */
+    dropColumns(table: Table|string, columns: TableColumn[]): Promise<void>;
+
+    /**
+     * Creates a new primary key.
+     */
+    createPrimaryKey(table: Table|string, columnNames: string[]): Promise<void>;
+
+    /**
+     * Updates composite primary keys.
+     */
+    updatePrimaryKeys(table: Table|string, columns: TableColumn[]): Promise<void>;
+
+    /**
+     * Drops a primary key.
+     */
+    dropPrimaryKey(table: Table|string): Promise<void>;
+
+    /**
+     * Creates a new unique constraint.
+     */
+    createUniqueConstraint(table: Table|string, uniqueConstraint: TableUnique): Promise<void>;
+
+    /**
+     * Creates new unique constraints.
+     */
+    createUniqueConstraints(table: Table|string, uniqueConstraints: TableUnique[]): Promise<void>;
+
+    /**
+     * Drops an unique constraint.
+     */
+    dropUniqueConstraint(table: Table|string, uniqueOrName: TableUnique|string): Promise<void>;
+
+    /**
+     * Drops unique constraints.
+     */
+    dropUniqueConstraints(table: Table|string, uniqueConstraints: TableUnique[]): Promise<void>;
+
+    /**
+     * Creates a new check constraint.
+     */
+    createCheckConstraint(table: Table|string, checkConstraint: TableCheck): Promise<void>;
+
+    /**
+     * Creates new check constraints.
+     */
+    createCheckConstraints(table: Table|string, checkConstraints: TableCheck[]): Promise<void>;
+
+    /**
+     * Drops a check constraint.
+     */
+    dropCheckConstraint(table: Table|string, checkOrName: TableCheck|string): Promise<void>;
+
+    /**
+     * Drops check constraints.
+     */
+    dropCheckConstraints(table: Table|string, checkConstraints: TableCheck[]): Promise<void>;
+
+    /**
+     * Creates a new foreign key.
+     */
+    createForeignKey(table: Table|string, foreignKey: TableForeignKey): Promise<void>;
+
+    /**
+     * Creates new foreign keys.
+     */
+    createForeignKeys(table: Table|string, foreignKeys: TableForeignKey[]): Promise<void>;
+
+    /**
+     * Drops a foreign key.
+     */
+    dropForeignKey(table: Table|string, foreignKeyOrName: TableForeignKey|string): Promise<void>;
+
+    /**
+     * Drops foreign keys.
+     */
+    dropForeignKeys(table: Table|string, foreignKeys: TableForeignKey[]): Promise<void>;
 
     /**
      * Creates a new index.
      */
-    createIndex(index: IndexSchema): Promise<void>;
+    createIndex(table: Table|string, index: TableIndex): Promise<void>;
 
     /**
-     * Drops an index from the table.
+     * Creates new indices.
      */
-    dropIndex(tableName: string, indexName: string): Promise<void>;
+    createIndices(table: Table|string, indices: TableIndex[]): Promise<void>;
+
+    /**
+     * Drops an index.
+     */
+    dropIndex(table: Table|string, index: TableIndex|string): Promise<void>;
+
+    /**
+     * Drops indices.
+     */
+    dropIndices(table: Table|string, indices: TableIndex[]): Promise<void>;
+
+    /**
+     * Clears all table contents.
+     * Note: this operation uses SQL's TRUNCATE query which cannot be reverted in transactions.
+     */
+    clearTable(tableName: string): Promise<void>;
+
+    /**
+     * Enables special query runner mode in which sql queries won't be executed,
+     * instead they will be memorized into a special variable inside query runner.
+     * You can get memorized sql using getMemorySql() method.
+     */
+    enableSqlMemory(): void;
+
+    /**
+     * Disables special query runner mode in which sql queries won't be executed
+     * started by calling enableSqlMemory() method.
+     *
+     * Previously memorized sql will be flushed.
+     */
+    disableSqlMemory(): void;
+
+    /**
+     * Flushes all memorized sqls.
+     */
+    clearSqlMemory(): void;
+
+    /**
+     * Gets sql stored in the memory. Parameters in the sql are already replaced.
+     */
+    getMemorySql(): SqlInMemory;
+
+    /**
+     * Executes up sql queries.
+     */
+    executeMemoryUpSql(): Promise<void>;
+
+    /**
+     * Executes down sql queries.
+     */
+    executeMemoryDownSql(): Promise<void>;
 
 }

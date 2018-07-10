@@ -1,10 +1,12 @@
-import {PrimaryGeneratedColumn, Column} from "../../../src/index";
+import {Column, PrimaryGeneratedColumn} from "../../../src/index";
 import {TreeLevelColumn} from "../../../src/decorator/tree/TreeLevelColumn";
-import {ClosureTable} from "../../../src/decorator/tables/ClosureTable";
 import {TreeParent} from "../../../src/decorator/tree/TreeParent";
 import {TreeChildren} from "../../../src/decorator/tree/TreeChildren";
+import {Tree} from "../../../src/decorator/tree/Tree";
+import {Entity} from "../../../src/decorator/entity/Entity";
 
-@ClosureTable("sample22_category")
+@Entity("sample22_category")
+@Tree("closure-table")
 export class Category {
 
     @PrimaryGeneratedColumn()
@@ -16,14 +18,14 @@ export class Category {
     @TreeParent()
     parentCategory: Category;
 
-    @TreeChildren({ cascadeAll: true })
+    @TreeChildren({ cascade: true })
     childCategories: Category[];
 
     @TreeLevelColumn()
     level: number;
 
     // todo:
-    // @RelationsCountColumn()
+    // @TreeChildrenCount()
     // categoriesCount: number;
 
 }

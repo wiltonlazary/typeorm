@@ -1,7 +1,7 @@
-import {PrimaryGeneratedColumn, Column, Table, OneToOne} from "../../../src/index";
+import {Column, Entity, OneToOne, PrimaryGeneratedColumn} from "../../../src/index";
 import {Post} from "./Post";
 
-@Table("sample2_post_information")
+@Entity("sample2_post_information")
 export class PostInformation {
 
     @PrimaryGeneratedColumn()
@@ -11,7 +11,7 @@ export class PostInformation {
     text: string;
     
     @OneToOne(type => Post, post => post.information, {
-        cascadeUpdate: true,
+        cascade: ["update"]
     })
     post: Post;
 

@@ -1,29 +1,25 @@
-import {getMetadataArgsStorage} from "../../index";
-import {RelationOptions} from "../options/RelationOptions";
-import {RelationTypes} from "../../metadata/types/RelationTypes";
+import {getMetadataArgsStorage} from "../../";
 import {RelationMetadataArgs} from "../../metadata-args/RelationMetadataArgs";
 
 /**
- * Marks a specific property of the class as a parent of the tree.
+ * Marks a entity property as a parent of the tree.
+ * "Tree parent" indicates who owns (is a parent) of this entity in tree structure.
  */
-export function TreeParent(options?: RelationOptions): Function {
+export function TreeParent(): Function {
     return function (object: Object, propertyName: string) {
-        if (!options) options = {} as RelationOptions;
 
-        const reflectedType = (Reflect as any).getMetadata("design:type", object, propertyName);
-        const isLazy = reflectedType && typeof reflectedType.name === "string" && reflectedType.name.toLowerCase() === "promise";
-        
-        const args: RelationMetadataArgs = {
+        // now try to determine it its lazy relation
+        const reflectedType = Reflect && (Reflect as any).getMetadata ? Reflect.getMetadata("design:type", object, propertyName) : undefined;
+        const isLazy = (reflectedType && typeof reflectedType.name === "string" && reflectedType.name.toLowerCase() === "promise") || false;
+
+        getMetadataArgsStorage().relations.push({
             isTreeParent: true,
             target: object.constructor,
             propertyName: propertyName,
-            propertyType: reflectedType,
             isLazy: isLazy,
-            relationType: RelationTypes.MANY_TO_ONE,
+            relationType: "many-to-one",
             type: () => object.constructor,
-            options: options
-        };
-        getMetadataArgsStorage().relations.add(args);
+            options: {}
+        } as RelationMetadataArgs);
     };
 }
-

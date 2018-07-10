@@ -1,8 +1,8 @@
-import {PrimaryGeneratedColumn, Column, Table} from "../../../src/index";
+import {Column, Entity, PrimaryGeneratedColumn} from "../../../src/index";
 import {Post} from "./Post";
 import {OneToMany} from "../../../src/decorator/relations/OneToMany";
 
-@Table("sample18_author")
+@Entity("sample18_author")
 export class Author {
 
     @PrimaryGeneratedColumn()
@@ -12,8 +12,7 @@ export class Author {
     name: string;
 
     @OneToMany(type => Post, post => post.author, {
-        cascadeInsert: true,
-        cascadeUpdate: true
+        cascade: true
     })
     posts: Promise<Post[]>;
 

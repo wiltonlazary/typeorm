@@ -1,22 +1,20 @@
-import {getMetadataArgsStorage} from "../../index";
+import {getMetadataArgsStorage, SelectQueryBuilder} from "../../";
 import {RelationCountMetadataArgs} from "../../metadata-args/RelationCountMetadataArgs";
 
 /**
  * Holds a number of children in the closure table of the column.
+ *
+ * @deprecated Do not use this decorator, it may be removed in the future versions
  */
-export function RelationCount<T>(relation: string|((object: T) => any)): Function {
+export function RelationCount<T>(relation: string|((object: T) => any), alias?: string, queryBuilderFactory?: (qb: SelectQueryBuilder<any>) => SelectQueryBuilder<any>): Function {
     return function (object: Object, propertyName: string) {
 
-        // todo: need to check if property type is number?
-        // const reflectedType = ColumnTypes.typeToString((Reflect as any).getMetadata("design:type", object, propertyName));
-
-        // create and register a new column metadata
-        const args: RelationCountMetadataArgs = {
+        getMetadataArgsStorage().relationCounts.push({
             target: object.constructor,
             propertyName: propertyName,
-            relation: relation
-        };
-        getMetadataArgsStorage().relationCounts.add(args);
+            relation: relation,
+            alias: alias,
+            queryBuilderFactory: queryBuilderFactory
+        } as RelationCountMetadataArgs);
     };
 }
-

@@ -1,9 +1,8 @@
 import {EntitySubscriberInterface} from "./EntitySubscriberInterface";
-import {ColumnMetadata} from "../metadata/ColumnMetadata";
-import {EventListenerTypes} from "../metadata/types/EventListenerTypes";
-import {EntityListenerMetadata} from "../metadata/EntityListenerMetadata";
-import {EntityMetadataCollection} from "../metadata-args/collection/EntityMetadataCollection";
 import {ObjectLiteral} from "../common/ObjectLiteral";
+import {QueryRunner} from "../query-runner/QueryRunner";
+import {EntityMetadata} from "../metadata/EntityMetadata";
+import {BroadcasterResult} from "./BroadcasterResult";
 
 /**
  * Broadcaster provides a helper methods to broadcast events to the subscribers.
@@ -14,9 +13,7 @@ export class Broadcaster {
     // Constructor
     // -------------------------------------------------------------------------
 
-    constructor(private entityMetadatas: EntityMetadataCollection,
-                private subscriberMetadatas: EntitySubscriberInterface<any>[],
-                private entityListeners: EntityListenerMetadata[]) {
+    constructor(private queryRunner: QueryRunner) {
     }
 
     // -------------------------------------------------------------------------
@@ -28,18 +25,37 @@ export class Broadcaster {
      * Before insert event is executed before entity is being inserted to the database for the first time.
      * All subscribers and entity listeners who listened to this event will be executed at this point.
      * Subscribers and entity listeners can return promises, it will wait until they are resolved.
+     *
+     * Note: this method has a performance-optimized code organization, do not change code structure.
      */
-    async broadcastBeforeInsertEvent(entity: ObjectLiteral): Promise<void> {
+    broadcastBeforeInsertEvent(result: BroadcasterResult, metadata: EntityMetadata, entity?: ObjectLiteral): void {
 
-        const listeners = this.entityListeners
-            .filter(listener => listener.type === EventListenerTypes.BEFORE_INSERT && this.isAllowedListener(listener, entity))
-            .map(entityListener => entity[entityListener.propertyName]());
+        if (entity && metadata.beforeInsertListeners.length) {
+            metadata.beforeInsertListeners.forEach(listener => {
+                if (listener.isAllowed(entity)) {
+                    const executionResult = listener.execute(entity);
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
 
-        const subscribers = this.subscriberMetadatas
-            .filter(subscriber => this.isAllowedSubscriber(subscriber, entity) && subscriber.beforeInsert)
-            .map(subscriber => subscriber.beforeInsert!({ entity: entity }));
-
-        await Promise.all(listeners.concat(subscribers));
+        if (this.queryRunner.connection.subscribers.length) {
+            this.queryRunner.connection.subscribers.forEach(subscriber => {
+                if (this.isAllowedSubscriber(subscriber, metadata.target) && subscriber.beforeInsert) {
+                    const executionResult = subscriber.beforeInsert({
+                        connection: this.queryRunner.connection,
+                        queryRunner: this.queryRunner,
+                        manager: this.queryRunner.manager,
+                        entity: entity
+                    });
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
     }
 
     /**
@@ -47,18 +63,39 @@ export class Broadcaster {
      * Before update event is executed before entity is being updated in the database.
      * All subscribers and entity listeners who listened to this event will be executed at this point.
      * Subscribers and entity listeners can return promises, it will wait until they are resolved.
+     *
+     * Note: this method has a performance-optimized code organization, do not change code structure.
      */
-    async broadcastBeforeUpdateEvent(entity: ObjectLiteral, updatedColumns: ColumnMetadata[]): Promise<void> { // todo: send relations too?
+    broadcastBeforeUpdateEvent(result: BroadcasterResult, metadata: EntityMetadata, entity?: ObjectLiteral, databaseEntity?: ObjectLiteral): void { // todo: send relations too?
+        if (entity && metadata.beforeUpdateListeners.length) {
+            metadata.beforeUpdateListeners.forEach(listener => {
+                if (listener.isAllowed(entity)) {
+                    const executionResult = listener.execute(entity);
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
 
-        const listeners = this.entityListeners
-            .filter(listener => listener.type === EventListenerTypes.BEFORE_UPDATE && this.isAllowedListener(listener, entity))
-            .map(entityListener => entity[entityListener.propertyName]());
-
-        const subscribers = this.subscriberMetadatas
-            .filter(subscriber => this.isAllowedSubscriber(subscriber, entity) && subscriber.beforeUpdate)
-            .map(subscriber => subscriber.beforeUpdate!({ entity: entity, updatedColumns: updatedColumns }));
-
-        await Promise.all(listeners.concat(subscribers));
+        if (this.queryRunner.connection.subscribers.length) {
+            this.queryRunner.connection.subscribers.forEach(subscriber => {
+                if (this.isAllowedSubscriber(subscriber, metadata.target) && subscriber.beforeUpdate) {
+                    const executionResult = subscriber.beforeUpdate({
+                        connection: this.queryRunner.connection,
+                        queryRunner: this.queryRunner,
+                        manager: this.queryRunner.manager,
+                        entity: entity,
+                        databaseEntity: databaseEntity,
+                        updatedColumns: [], // todo: subject.diffColumns,
+                        updatedRelations: [] // subject.diffRelations,
+                    });
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
     }
 
     /**
@@ -66,18 +103,38 @@ export class Broadcaster {
      * Before remove event is executed before entity is being removed from the database.
      * All subscribers and entity listeners who listened to this event will be executed at this point.
      * Subscribers and entity listeners can return promises, it will wait until they are resolved.
+     *
+     * Note: this method has a performance-optimized code organization, do not change code structure.
      */
-    async broadcastBeforeRemoveEvent(entity: ObjectLiteral, entityId: any): Promise<void> {
+    broadcastBeforeRemoveEvent(result: BroadcasterResult, metadata: EntityMetadata, entity?: ObjectLiteral, databaseEntity?: ObjectLiteral): void {
+        if (entity && metadata.beforeRemoveListeners.length) {
+            metadata.beforeRemoveListeners.forEach(listener => {
+                if (listener.isAllowed(entity)) {
+                    const executionResult = listener.execute(entity);
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
 
-        const listeners = this.entityListeners
-            .filter(listener => listener.type === EventListenerTypes.BEFORE_REMOVE && this.isAllowedListener(listener, entity))
-            .map(entityListener => entity[entityListener.propertyName]());
-
-        const subscribers = this.subscriberMetadatas
-            .filter(subscriber => this.isAllowedSubscriber(subscriber, entity) && subscriber.beforeRemove)
-            .map(subscriber => subscriber.beforeRemove!({ entity: entity, entityId: entityId }));
-
-        await Promise.all(listeners.concat(subscribers));
+        if (this.queryRunner.connection.subscribers.length) {
+            this.queryRunner.connection.subscribers.forEach(subscriber => {
+                if (this.isAllowedSubscriber(subscriber, metadata.target) && subscriber.beforeRemove) {
+                    const executionResult = subscriber.beforeRemove({
+                        connection: this.queryRunner.connection,
+                        queryRunner: this.queryRunner,
+                        manager: this.queryRunner.manager,
+                        entity: entity,
+                        databaseEntity: databaseEntity,
+                        entityId: metadata.getEntityIdMixedMap(databaseEntity)
+                    });
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
     }
 
     /**
@@ -85,18 +142,37 @@ export class Broadcaster {
      * After insert event is executed after entity is being persisted to the database for the first time.
      * All subscribers and entity listeners who listened to this event will be executed at this point.
      * Subscribers and entity listeners can return promises, it will wait until they are resolved.
+     *
+     * Note: this method has a performance-optimized code organization, do not change code structure.
      */
-    async broadcastAfterInsertEvent(entity: ObjectLiteral): Promise<void> {
+    broadcastAfterInsertEvent(result: BroadcasterResult, metadata: EntityMetadata, entity?: ObjectLiteral): void {
 
-        const listeners = this.entityListeners
-            .filter(listener => listener.type === EventListenerTypes.AFTER_INSERT && this.isAllowedListener(listener, entity))
-            .map(entityListener => entity[entityListener.propertyName]());
+        if (entity && metadata.afterInsertListeners.length) {
+            metadata.afterInsertListeners.forEach(listener => {
+                if (listener.isAllowed(entity)) {
+                    const executionResult = listener.execute(entity);
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
 
-        const subscribers = this.subscriberMetadatas
-            .filter(subscriber => this.isAllowedSubscriber(subscriber, entity) && subscriber.afterInsert)
-            .map(subscriber => subscriber.afterInsert!({ entity: entity }));
-
-        await Promise.all(listeners.concat(subscribers));
+        if (this.queryRunner.connection.subscribers.length) {
+            this.queryRunner.connection.subscribers.forEach(subscriber => {
+                if (this.isAllowedSubscriber(subscriber, metadata.target) && subscriber.afterInsert) {
+                    const executionResult = subscriber.afterInsert({
+                        connection: this.queryRunner.connection,
+                        queryRunner: this.queryRunner,
+                        manager: this.queryRunner.manager,
+                        entity: entity
+                    });
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
     }
 
     /**
@@ -104,18 +180,40 @@ export class Broadcaster {
      * After update event is executed after entity is being updated in the database.
      * All subscribers and entity listeners who listened to this event will be executed at this point.
      * Subscribers and entity listeners can return promises, it will wait until they are resolved.
+     *
+     * Note: this method has a performance-optimized code organization, do not change code structure.
      */
-    async broadcastAfterUpdateEvent(entity: ObjectLiteral, updatedColumns: ColumnMetadata[]): Promise<void> {
+    broadcastAfterUpdateEvent(result: BroadcasterResult, metadata: EntityMetadata, entity?: ObjectLiteral, databaseEntity?: ObjectLiteral): void {
 
-        const listeners = this.entityListeners
-            .filter(listener => listener.type === EventListenerTypes.AFTER_UPDATE && this.isAllowedListener(listener, entity))
-            .map(entityListener => entity[entityListener.propertyName]());
+        if (entity && metadata.afterUpdateListeners.length) {
+            metadata.afterUpdateListeners.forEach(listener => {
+                if (listener.isAllowed(entity)) {
+                    const executionResult = listener.execute(entity);
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
 
-        const subscribers = this.subscriberMetadatas
-            .filter(subscriber => this.isAllowedSubscriber(subscriber, entity) && subscriber.afterUpdate)
-            .map(subscriber => subscriber.afterUpdate!({ entity: entity, updatedColumns: updatedColumns }));
-
-        await Promise.all(listeners.concat(subscribers));
+        if (this.queryRunner.connection.subscribers.length) {
+            this.queryRunner.connection.subscribers.forEach(subscriber => {
+                if (this.isAllowedSubscriber(subscriber, metadata.target) && subscriber.afterUpdate) {
+                    const executionResult = subscriber.afterUpdate({
+                        connection: this.queryRunner.connection,
+                        queryRunner: this.queryRunner,
+                        manager: this.queryRunner.manager,
+                        entity: entity,
+                        databaseEntity: databaseEntity,
+                        updatedColumns: [], // todo: subject.diffColumns,
+                        updatedRelations: [] // todo: subject.diffRelations,
+                    });
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
     }
 
     /**
@@ -123,18 +221,39 @@ export class Broadcaster {
      * After remove event is executed after entity is being removed from the database.
      * All subscribers and entity listeners who listened to this event will be executed at this point.
      * Subscribers and entity listeners can return promises, it will wait until they are resolved.
+     *
+     * Note: this method has a performance-optimized code organization, do not change code structure.
      */
-    async broadcastAfterRemoveEvent(entity: ObjectLiteral, entityId: any): Promise<void> {
+    broadcastAfterRemoveEvent(result: BroadcasterResult, metadata: EntityMetadata, entity?: ObjectLiteral, databaseEntity?: ObjectLiteral): void {
 
-        const listeners = this.entityListeners
-            .filter(listener => listener.type === EventListenerTypes.AFTER_REMOVE && this.isAllowedListener(listener, entity))
-            .map(entityListener => entity[entityListener.propertyName]());
+        if (entity && metadata.afterRemoveListeners.length) {
+            metadata.afterRemoveListeners.forEach(listener => {
+                if (listener.isAllowed(entity)) {
+                    const executionResult = listener.execute(entity);
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
 
-        const subscribers = this.subscriberMetadatas
-            .filter(subscriber => this.isAllowedSubscriber(subscriber, entity) && subscriber.afterRemove)
-            .map(subscriber => subscriber.afterRemove!({ entity: entity, entityId: entityId }));
-
-        await Promise.all(listeners.concat(subscribers));
+        if (this.queryRunner.connection.subscribers.length) {
+            this.queryRunner.connection.subscribers.forEach(subscriber => {
+                if (this.isAllowedSubscriber(subscriber, metadata.target) && subscriber.afterRemove) {
+                    const executionResult = subscriber.afterRemove({
+                        connection: this.queryRunner.connection,
+                        queryRunner: this.queryRunner,
+                        manager: this.queryRunner.manager,
+                        entity: entity,
+                        databaseEntity: databaseEntity,
+                        entityId: metadata.getEntityIdMixedMap(databaseEntity)
+                    });
+                    if (executionResult instanceof Promise)
+                        result.promises.push(executionResult);
+                    result.count++;
+                }
+            });
+        }
     }
 
     /**
@@ -142,45 +261,50 @@ export class Broadcaster {
      * After load event is executed after entity has been loaded from the database.
      * All subscribers and entity listeners who listened to this event will be executed at this point.
      * Subscribers and entity listeners can return promises, it will wait until they are resolved.
+     *
+     * Note: this method has a performance-optimized code organization, do not change code structure.
      */
-    async broadcastLoadEventsForAll(target: Function|string, entities: any[]): Promise<void> {
-        await Promise.all(entities.map(entity => this.broadcastLoadEvents(target, entity)));
-    }
+    broadcastLoadEventsForAll(result: BroadcasterResult, metadata: EntityMetadata, entities: ObjectLiteral[]): void {
+        entities.forEach(entity => {
+            if (entity instanceof Promise) // todo: check why need this?
+                return;
 
-    /**
-     * Broadcasts "AFTER_LOAD" event for the given entity and all its sub-entities.
-     * After load event is executed after entity has been loaded from the database.
-     * All subscribers and entity listeners who listened to this event will be executed at this point.
-     * Subscribers and entity listeners can return promises, it will wait until they are resolved.
-     */
-    async broadcastLoadEvents(target: Function|string, entity: any): Promise<void> {
-        if (entity instanceof Promise) // todo: check why need this?
-            return;
+            // collect load events for all children entities that were loaded with the main entity
+            if (metadata.relations.length) {
+                metadata.relations.forEach(relation => {
 
-        // collect load events for all children entities that were loaded with the main entity
-        const children = this.entityMetadatas.findByTarget(target).relations.reduce((promises, relation) => {
-            if (!entity.hasOwnProperty(relation.propertyName))
-                return promises;
+                    // in lazy relations we cannot simply access to entity property because it will cause a getter and a database query
+                    if (relation.isLazy && !entity.hasOwnProperty(relation.propertyName))
+                        return;
 
-            const value = relation.getEntityValue(entity);
-            if (value instanceof Array) {
-                promises = promises.concat(this.broadcastLoadEventsForAll(relation.inverseEntityMetadata.target, value));
-            } else if (value) {
-                promises.push(this.broadcastLoadEvents(relation.inverseEntityMetadata.target, value));
+                    const value = relation.getEntityValue(entity);
+                    if (value instanceof Object)
+                        this.broadcastLoadEventsForAll(result, relation.inverseEntityMetadata, value instanceof Array ? value : [value]);
+                });
             }
 
-            return promises;
-        }, [] as Promise<void>[]);
+            if (metadata.afterLoadListeners.length) {
+                metadata.afterLoadListeners.forEach(listener => {
+                    if (listener.isAllowed(entity)) {
+                        const executionResult = listener.execute(entity);
+                        if (executionResult instanceof Promise)
+                            result.promises.push(executionResult);
+                        result.count++;
+                    }
+                });
+            }
 
-        const listeners = this.entityListeners
-            .filter(listener => listener.type === EventListenerTypes.AFTER_LOAD && this.isAllowedListener(listener, entity))
-            .map(listener => entity[listener.propertyName]());
-
-        const subscribers = this.subscriberMetadatas
-            .filter(subscriber => this.isAllowedSubscriber(subscriber, entity) && subscriber.afterLoad)
-            .map(subscriber => subscriber.afterLoad!(entity));
-
-        await Promise.all(children.concat(listeners.concat(subscribers)));
+            if (this.queryRunner.connection.subscribers.length) {
+                this.queryRunner.connection.subscribers.forEach(subscriber => {
+                    if (this.isAllowedSubscriber(subscriber, metadata.target) && subscriber.afterLoad) {
+                        const executionResult = subscriber.afterLoad!(entity);
+                        if (executionResult instanceof Promise)
+                            result.promises.push(executionResult);
+                        result.count++;
+                    }
+                });
+            }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -188,22 +312,15 @@ export class Broadcaster {
     // -------------------------------------------------------------------------
 
     /**
-     * Checks if entity listener is allowed to be executed on the given entity.
-     */
-    protected isAllowedListener(listener: EntityListenerMetadata, entity: ObjectLiteral) {
-        return listener.target === entity.constructor || // todo: .constructor won't work for entity schemas
-            (listener.target instanceof Function && entity.constructor.prototype instanceof listener.target); // todo: also need to implement entity schema inheritance
-    }
-
-    /**
      * Checks if subscriber's methods can be executed by checking if its don't listen to the particular entity,
      * or listens our entity.
      */
-    protected isAllowedSubscriber(subscriber: EntitySubscriberInterface<any>, entity: ObjectLiteral): boolean {
+    protected isAllowedSubscriber(subscriber: EntitySubscriberInterface<any>, target: Function|string): boolean {
         return  !subscriber.listenTo ||
-                !subscriber.listenTo() ||
-                subscriber.listenTo() === Object ||
-                subscriber.listenTo() === entity.constructor;
+            !subscriber.listenTo() ||
+            subscriber.listenTo() === Object ||
+            subscriber.listenTo() === target ||
+            subscriber.listenTo().isPrototypeOf(target);
     }
 
 }

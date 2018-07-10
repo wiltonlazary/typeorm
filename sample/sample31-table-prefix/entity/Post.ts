@@ -1,10 +1,10 @@
-import {PrimaryGeneratedColumn, Column, Table, ManyToOne} from "../../../src/index";
+import {Column, Entity, ManyToOne, PrimaryGeneratedColumn} from "../../../src/index";
 import {JoinTable} from "../../../src/decorator/relations/JoinTable";
 import {ManyToMany} from "../../../src/decorator/relations/ManyToMany";
 import {Author} from "./Author";
 import {Category} from "./Category";
 
-@Table("sample31_post")
+@Entity("sample31_post")
 export class Post {
 
     @PrimaryGeneratedColumn()
@@ -17,12 +17,12 @@ export class Post {
     text: string;
 
     @ManyToOne(type => Author, {
-        cascadeInsert: true
+        cascade: ["insert"]
     })
     author: Author;
 
     @ManyToMany(type => Category, {
-        cascadeInsert: true
+        cascade: ["insert"]
     })
     @JoinTable()
     categories: Category[];

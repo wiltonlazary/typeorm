@@ -1,18 +1,16 @@
 import "reflect-metadata";
-import {setupTestingConnections, closeConnections, reloadDatabases} from "../../../utils/test-utils";
+import {closeTestingConnections, createTestingConnections, reloadTestingDatabases} from "../../../utils/test-utils";
 import {Connection} from "../../../../src/connection/Connection";
 import {Customer} from "./entity/Customer";
 
-describe.only("indices > basic unique index test", () => {
+describe("indices > basic unique index test", () => {
 
     let connections: Connection[];
-    before(async () => connections = await setupTestingConnections({
+    before(async () => connections = await createTestingConnections({
         entities: [__dirname + "/entity/*{.js,.ts}"],
-        schemaCreate: true,
-        dropSchemaOnConnection: true,
     }));
-    beforeEach(() => reloadDatabases(connections));
-    after(() => closeConnections(connections));
+    beforeEach(() => reloadTestingDatabases(connections));
+    after(() => closeTestingConnections(connections));
 
     describe("unique index", function() {
 
@@ -20,7 +18,7 @@ describe.only("indices > basic unique index test", () => {
             const customer = new Customer();
             customer.nameEnglish = "Umed";
             customer.nameHebrew = "Uma";
-            await connection.entityManager.persist(customer);
+            await connection.manager.save(customer);
         })));
 
     });

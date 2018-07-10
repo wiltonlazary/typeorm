@@ -1,7 +1,4 @@
-import {RelationOptions} from "../options/RelationOptions";
-import {RelationTypes} from "../../metadata/types/RelationTypes";
-import {getMetadataArgsStorage} from "../../index";
-import {ObjectType} from "../../common/ObjectType";
+import {getMetadataArgsStorage, ObjectType, RelationOptions} from "../../";
 import {RelationMetadataArgs} from "../../metadata-args/RelationMetadataArgs";
 
 /**
@@ -25,6 +22,8 @@ export function OneToOne<T>(typeFunction: (type?: any) => ObjectType<T>,
 export function OneToOne<T>(typeFunction: (type?: any) => ObjectType<T>,
                             inverseSideOrOptions?: string|((object: T) => any)|RelationOptions,
                             options?: RelationOptions): Function {
+
+    // normalize parameters
     let inverseSideProperty: string|((object: T) => any);
     if (typeof inverseSideOrOptions === "object") {
         options = <RelationOptions> inverseSideOrOptions;
@@ -35,19 +34,23 @@ export function OneToOne<T>(typeFunction: (type?: any) => ObjectType<T>,
     return function (object: Object, propertyName: string) {
         if (!options) options = {} as RelationOptions;
 
-        const reflectedType = (Reflect as any).getMetadata("design:type", object, propertyName);
-        const isLazy = reflectedType && typeof reflectedType.name === "string" && reflectedType.name.toLowerCase() === "promise";
+        // now try to determine it its lazy relation
+        let isLazy = options && options.lazy === true ? true : false;
+        if (!isLazy && Reflect && (Reflect as any).getMetadata) { // automatic determination
+            const reflectedType = (Reflect as any).getMetadata("design:type", object, propertyName);
+            if (reflectedType && typeof reflectedType.name === "string" && reflectedType.name.toLowerCase() === "promise")
+                isLazy = true;
+        }
 
-        const args: RelationMetadataArgs = {
+        getMetadataArgsStorage().relations.push({
             target: object.constructor,
             propertyName: propertyName,
-            propertyType: reflectedType,
+            // propertyType: reflectedType,
             isLazy: isLazy,
-            relationType: RelationTypes.ONE_TO_ONE,
+            relationType: "one-to-one",
             type: typeFunction,
             inverseSideProperty: inverseSideProperty,
             options: options
-        };
-        getMetadataArgsStorage().relations.add(args);
+        } as RelationMetadataArgs);
     };
 }

@@ -1,6 +1,4 @@
-import {ColumnOptions} from "../options/ColumnOptions";
-import {ColumnTypes} from "../../metadata/types/ColumnTypes";
-import {getMetadataArgsStorage} from "../../index";
+import {ColumnOptions, getMetadataArgsStorage} from "../../";
 import {ColumnMetadataArgs} from "../../metadata-args/ColumnMetadataArgs";
 
 /**
@@ -10,24 +8,11 @@ import {ColumnMetadataArgs} from "../../metadata-args/ColumnMetadataArgs";
  */
 export function CreateDateColumn(options?: ColumnOptions): Function {
     return function (object: Object, propertyName: string) {
-
-        const reflectedType = ColumnTypes.typeToString((Reflect as any).getMetadata("design:type", object, propertyName));
-
-        // if column options are not given then create a new empty options
-        if (!options) options = {} as ColumnOptions;
-
-        // implicitly set a type, because this column's type cannot be anything else except date
-        options = Object.assign({ type: ColumnTypes.DATETIME } as ColumnOptions, options);
-
-        // create and register a new column metadata
-        const args: ColumnMetadataArgs = {
+        getMetadataArgsStorage().columns.push({
             target: object.constructor,
             propertyName: propertyName,
-            propertyType: reflectedType,
             mode: "createDate",
-            options: options
-        };
-        getMetadataArgsStorage().columns.add(args);
+            options: options || {}
+        } as ColumnMetadataArgs);
     };
 }
-

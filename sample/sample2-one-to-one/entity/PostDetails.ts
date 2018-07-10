@@ -1,7 +1,7 @@
-import {PrimaryGeneratedColumn, Column, Table, OneToOne} from "../../../src/index";
+import {Column, Entity, OneToOne, PrimaryGeneratedColumn} from "../../../src/index";
 import {Post} from "./Post";
 
-@Table("sample2_post_details")
+@Entity("sample2_post_details")
 export class PostDetails {
 
     @PrimaryGeneratedColumn()
@@ -17,9 +17,7 @@ export class PostDetails {
     metadata: string;
     
     @OneToOne(type => Post, post => post.details, {
-        cascadeInsert: true,
-        cascadeUpdate: true,
-        cascadeRemove: true
+        cascade: true
     })
     post: Post;
 
